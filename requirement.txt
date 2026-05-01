@@ -1,0 +1,11 @@
+pandas
+numpy
+scikit-learn
+xgboost
+lightgbm
+pdfplumber
+langchain
+streamlit
+plotly
+shap
+anthropic
