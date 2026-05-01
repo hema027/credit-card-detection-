@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CreditLens AI — Alternative Credit Scoring</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --gold:#f0a500;--gold-light:#ffd166;--gold-dark:#c47d00;
+  --green:#06d6a0;--red:#ef233c;--blue:#4cc9f0;
+  --bg:#07070d;--bg2:#0e0e1a;--bg3:#16162a;--bg4:#1e1e35;
+  --border:#252540;--border2:#303055;
+  --text:#e8e8f5;--muted:#7070a0;--muted2:#5050808;
+  --gemini-blue:#4285f4;--gemini-purple:#a142f4;--gemini-teal:#24c1e0;
+  --font-head:'Syne',sans-serif;--font-mono:'Space Mono',monospace;
+  --radius:10px;--radius-lg:16px;
+  --shadow:0 4px 24px rgba(0,0,0,0.4);
+}
+
+html{scroll-behavior:smooth}
+body{font-family:var(--font-mono);background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+
+/* Grain overlay */
+body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");opacity:0.4;pointer-events:none;z-index:0}
+
+/* Radial glow bg */
+body::after{content:'';position:fixed;top:-30%;left:-20%;width:80%;height:80%;background:radial-gradient(ellipse,rgba(240,165,0,0.04) 0%,transparent 70%);pointer-events:none;z-index:0}
+
+.app{max-width:960px;margin:0 auto;padding:2rem 1.5rem;position:relative;z-index:1}
+
+/* ── Header ── */
+.header{text-align:center;padding:3rem 1rem 2.5rem;position:relative}
+.header-eyebrow{font-size:0.65rem;letter-spacing:0.25em;text-transform:uppercase;color:var(--muted);margin-bottom:0.75rem}
+.header h1{font-family:var(--font-head);font-size:clamp(2rem,5vw,3.2rem);font-weight:800;letter-spacing:-0.02em;background:linear-gradient(135deg,var(--gold) 0%,var(--gold-light) 50%,var(--gold-dark) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1.1;margin-bottom:0.5rem}
+.header-sub{font-size:0.75rem;color:var(--muted);letter-spacing:0.05em;margin-bottom:1.25rem}
+.gemini-pill{display:inline-flex;align-items:center;gap:0.5rem;padding:0.35rem 1rem;border-radius:100px;font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;background:linear-gradient(135deg,rgba(66,133,244,0.15),rgba(161,66,244,0.15));border:1px solid rgba(161,66,244,0.3);color:#c0aaff}
+.gemini-pill-dot{width:6px;height:6px;border-radius:50%;background:linear-gradient(135deg,var(--gemini-blue),var(--gemini-purple));animation:glow-pulse 2s infinite}
+@keyframes glow-pulse{0%,100%{box-shadow:0 0 4px rgba(161,66,244,0.8)}50%{box-shadow:0 0 12px rgba(161,66,244,0.8),0 0 24px rgba(66,133,244,0.4)}}
+
+/* ── API Key ── */
+.api-strip{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);padding:0.9rem 1.2rem;margin-bottom:1.75rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.api-strip-label{font-size:0.65rem;text-transform:uppercase;letter-spacing:0.15em;color:var(--muted);white-space:nowrap;flex-shrink:0}
+.api-key-input{flex:1;min-width:200px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.8rem;color:var(--text);font-family:var(--font-mono);font-size:0.78rem;outline:none;transition:border-color 0.2s}
+.api-key-input:focus{border-color:var(--gemini-purple)}
+.api-key-input::placeholder{color:var(--muted);opacity:0.6}
+.key-badge{font-size:0.65rem;font-weight:700;padding:0.25rem 0.7rem;border-radius:20px;white-space:nowrap;flex-shrink:0}
+.key-ok{background:rgba(6,214,160,0.15);color:var(--green);border:1px solid rgba(6,214,160,0.3)}
+.key-bad{background:rgba(239,35,60,0.15);color:var(--red);border:1px solid rgba(239,35,60,0.3)}
+
+/* ── Tabs ── */
+.tabs-wrap{margin-bottom:2rem}
+.tabs{display:flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--bg2)}
+.tab-btn{flex:1;padding:0.8rem 0.5rem;text-align:center;cursor:pointer;font-family:var(--font-mono);font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;background:transparent;color:var(--muted);border:none;transition:all 0.25s;position:relative}
+.tab-btn::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--gold);transform:scaleX(0);transition:transform 0.25s}
+.tab-btn.active{color:var(--gold);background:rgba(240,165,0,0.06)}
+.tab-btn.active::after{transform:scaleX(1)}
+.tab-btn:hover:not(.active){color:var(--text);background:var(--bg3)}
+.tab-btn .tab-num{display:block;font-size:0.55rem;opacity:0.6;margin-bottom:0.15rem}
+
+.section{display:none}
+.section.active{display:block;animation:fadeIn 0.3s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── Cards ── */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.5rem;margin-bottom:1.5rem;position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(240,165,0,0.2),transparent)}
+.card-title{font-family:var(--font-head);font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.2em;color:var(--gold);margin-bottom:1.25rem;display:flex;align-items:center;gap:0.5rem}
+.card-title-icon{opacity:0.7;font-size:0.9rem}
+
+/* ── Layout ── */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem}
+
+/* ── Form Inputs ── */
+.field{margin-bottom:1rem}
+.field label{display:block;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.12em;color:var(--muted);margin-bottom:0.4rem}
+.field input[type=text],.field input[type=number],.field select{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:0.6rem 0.8rem;color:var(--text);font-family:var(--font-mono);font-size:0.82rem;outline:none;transition:border-color 0.2s,background 0.2s}
+.field input:focus,.field select:focus{border-color:var(--gold);background:var(--bg4)}
+.field select option{background:var(--bg3)}
+.range-row{display:flex;align-items:center;gap:0.75rem}
+.range-row input[type=range]{flex:1;-webkit-appearance:none;height:4px;background:var(--border2);border-radius:2px;outline:none;accent-color:var(--gold)}
+.range-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--gold);cursor:pointer;box-shadow:0 0 6px rgba(240,165,0,0.4)}
+.range-val{font-size:0.82rem;color:var(--gold);min-width:70px;text-align:right;font-weight:700}
+
+/* ── Buttons ── */
+.btn{padding:0.75rem 1.75rem;border:none;border-radius:8px;cursor:pointer;font-family:var(--font-mono);font-size:0.75rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;transition:all 0.2s;display:inline-flex;align-items:center;gap:0.5rem}
+.btn-primary{background:var(--gold);color:#07070d;box-shadow:0 4px 16px rgba(240,165,0,0.3)}
+.btn-primary:hover{background:var(--gold-light);box-shadow:0 4px 24px rgba(240,165,0,0.5);transform:translateY(-1px)}
+.btn-ghost{background:transparent;color:var(--gold);border:1px solid rgba(240,165,0,0.4)}
+.btn-ghost:hover{background:rgba(240,165,0,0.08);border-color:var(--gold)}
+.btn:disabled{opacity:0.45;cursor:not-allowed;transform:none!important}
+.btn-row{text-align:center;margin-top:1.5rem}
+
+/* ── Upload Zone ── */
+.upload-zone{border:2px dashed var(--border2);border-radius:var(--radius-lg);padding:2.5rem;text-align:center;cursor:pointer;transition:all 0.25s;margin-bottom:1rem;background:var(--bg3)}
+.upload-zone:hover,.upload-zone.dragging{border-color:var(--gold);background:rgba(240,165,0,0.04)}
+.upload-icon{font-size:2.2rem;margin-bottom:0.75rem;opacity:0.5}
+.upload-text{font-size:0.75rem;color:var(--muted);line-height:1.7}
+.upload-success{font-size:0.75rem;color:var(--green);display:none;padding:0.6rem 0.8rem;background:rgba(6,214,160,0.08);border:1px solid rgba(6,214,160,0.2);border-radius:6px;margin-bottom:1rem}
+
+/* ── Step indicator ── */
+.steps{display:flex;gap:0;margin-bottom:1.75rem;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.step-item{flex:1;padding:0.55rem;text-align:center;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);background:var(--bg2);border-right:1px solid var(--border);position:relative}
+.step-item:last-child{border-right:none}
+.step-item.done{color:var(--gold);background:rgba(240,165,0,0.05)}
+.step-item.active{color:#07070d;background:var(--gold);font-weight:700}
+.step-item.done::after{content:'✓';position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:0.6rem;opacity:0.7}
+
+/* ── LLM Output ── */
+.llm-box{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:1.1rem 1.2rem;font-size:0.78rem;line-height:1.9;white-space:pre-wrap;max-height:280px;overflow-y:auto;color:var(--text);font-family:var(--font-mono)}
+.llm-box::-webkit-scrollbar{width:4px}
+.llm-box::-webkit-scrollbar-track{background:var(--bg3)}
+.llm-box::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.cursor{display:inline-block;width:8px;height:1em;background:var(--gold);vertical-align:middle;animation:blink 0.8s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+/* ── Loading ── */
+.loading-row{display:flex;align-items:center;gap:0.75rem;color:var(--muted);font-size:0.75rem;padding:0.5rem 0}
+.ld{width:7px;height:7px;border-radius:50%;background:var(--gold);animation:ldp 1.2s infinite}
+.ld:nth-child(2){animation-delay:0.18s}.ld:nth-child(3){animation-delay:0.36s}
+@keyframes ldp{0%,80%,100%{transform:scale(0.7);opacity:0.4}40%{transform:scale(1.2);opacity:1}}
+.error-box{background:rgba(239,35,60,0.08);border:1px solid rgba(239,35,60,0.25);border-radius:8px;padding:0.8rem 1rem;font-size:0.75rem;color:#ff8095;margin-bottom:0.75rem;display:none}
+
+/* ── Transactions ── */
+.txn-table{width:100%;font-size:0.72rem;border-collapse:collapse}
+.txn-table th{text-align:left;padding:0.55rem 0.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-size:0.6rem;border-bottom:1px solid var(--border)}
+.txn-table td{padding:0.55rem 0.6rem;border-bottom:1px solid var(--bg3)}
+.txn-table tr:hover td{background:var(--bg3)}
+.tag{display:inline-block;padding:0.12rem 0.45rem;border-radius:4px;font-size:0.6rem;font-weight:700;text-transform:uppercase}
+.tag-salary{background:rgba(6,214,160,0.15);color:#06d6a0}
+.tag-bill{background:rgba(76,201,240,0.12);color:#4cc9f0}
+.tag-food{background:rgba(240,165,0,0.12);color:var(--gold)}
+.tag-upi{background:rgba(161,66,244,0.12);color:#c084fc}
+.tag-other{background:rgba(112,112,160,0.15);color:var(--muted)}
+.amt-pos{color:var(--green)}.amt-neg{color:var(--red)}
+
+/* ── Score ── */
+.score-card{text-align:center;padding:1.5rem 1rem}
+.gauge-svg{width:200px;height:115px;overflow:visible}
+.score-num{font-family:var(--font-head);font-size:3.5rem;font-weight:800;color:var(--gold);letter-spacing:-0.03em;line-height:1;margin:0.5rem 0 0.3rem}
+.score-denom{font-size:0.7rem;color:var(--muted)}
+.score-label{font-family:var(--font-head);font-size:1rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;margin-top:0.5rem}
+.risk-pill{display:inline-block;padding:0.3rem 0.9rem;border-radius:100px;font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;margin-top:0.75rem}
+.risk-low{background:rgba(6,214,160,0.12);color:var(--green);border:1px solid rgba(6,214,160,0.3)}
+.risk-mid{background:rgba(240,165,0,0.12);color:var(--gold);border:1px solid rgba(240,165,0,0.3)}
+.risk-high{background:rgba(239,35,60,0.12);color:var(--red);border:1px solid rgba(239,35,60,0.3)}
+
+/* ── Bars ── */
+.bar-row{margin-bottom:0.9rem}
+.bar-meta{display:flex;justify-content:space-between;margin-bottom:0.35rem;font-size:0.7rem}
+.bar-meta span:first-child{color:var(--muted);text-transform:uppercase;letter-spacing:0.05em}
+.bar-meta span:last-child{color:var(--gold);font-weight:700}
+.bar-track{background:var(--bg3);border-radius:3px;height:6px;overflow:hidden}
+.bar-fill{height:100%;border-radius:3px;transition:width 1s cubic-bezier(0.4,0,0.2,1);background:linear-gradient(90deg,var(--gold-dark),var(--gold),var(--gold-light))}
+
+/* ── Metric Cards ── */
+.metric-card{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:1rem;text-align:center}
+.metric-val{font-family:var(--font-head);font-size:1.4rem;font-weight:700;color:var(--gold)}
+.metric-lbl{font-size:0.6rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-top:0.3rem}
+
+/* ── Insight Cards ── */
+.insight-row{display:flex;gap:0.8rem;padding:0.85rem 0;border-bottom:1px solid var(--border)}
+.insight-row:last-child{border-bottom:none}
+.insight-ico{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0}
+.ins-pos{background:rgba(6,214,160,0.12)}
+.ins-neg{background:rgba(239,35,60,0.12)}
+.ins-neu{background:rgba(240,165,0,0.1)}
+.insight-title{font-size:0.78rem;font-weight:700;margin-bottom:0.2rem}
+.insight-desc{font-size:0.7rem;color:var(--muted);line-height:1.55}
+
+/* ── Spending Chart ── */
+.chart-wrap{height:120px;display:flex;align-items:flex-end;gap:5px;padding:0 4px}
+.chart-bar{flex:1;border-radius:4px 4px 0 0;background:var(--gold);opacity:0.55;transition:height 0.8s ease,opacity 0.2s;cursor:pointer;position:relative}
+.chart-bar:hover{opacity:1}
+.chart-bar .tip{position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:var(--bg);border:1px solid var(--border2);padding:0.25rem 0.5rem;border-radius:4px;font-size:0.62rem;white-space:nowrap;pointer-events:none;display:none}
+.chart-bar:hover .tip{display:block}
+.chart-months{display:flex;gap:5px;padding:4px 4px 0;font-size:0.58rem;color:var(--muted)}
+.chart-month{flex:1;text-align:center}
+
+/* ── Report ── */
+.report-hd{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem}
+.report-id-text{font-size:0.62rem;color:var(--muted);margin-top:0.3rem}
+.rec-item{display:flex;gap:0.8rem;padding:0.75rem 0.85rem;background:var(--bg3);border-radius:8px;margin-bottom:0.6rem;border-left:3px solid var(--gold)}
+.rec-num{width:22px;height:22px;border-radius:50%;background:var(--gold);color:#07070d;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:700;flex-shrink:0}
+.rec-text{font-size:0.75rem;line-height:1.6;color:var(--text)}
+
+/* ── Feature Grid ── */
+#features-grid .metric-card .metric-val{font-size:1rem}
+
+@media(max-width:640px){
+  .grid2,.grid3{grid-template-columns:1fr}
+  .header h1{font-size:1.8rem}
+  .score-num{font-size:2.5rem}
+  .api-strip{flex-direction:column;align-items:stretch}
+  .tabs .tab-btn .tab-num{display:none}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- HEADER -->
+  <header class="header">
+    <p class="header-eyebrow">Alternative Data Credit Scoring System</p>
+    <h1>CreditLens AI</h1>
+    <p class="header-sub">Bank Statement Intelligence &amp; Creditworthiness Assessment</p>
+    <div class="gemini-pill">
+      <span class="gemini-pill-dot"></span>
+      Powered by Google Gemini 2.0 Flash
+    </div>
+  </header>
+
+  <!-- API KEY STRIP -->
+  <div class="api-strip">
+    <span class="api-strip-label">🔑 Gemini API Key</span>
+    <input class="api-key-input" type="password" id="gemini-key" placeholder="Paste your Gemini API key (AIza...)" oninput="onKeyInput()" />
+    <span class="key-badge key-ok" id="key-badge">✓ Default Key</span>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs-wrap">
+    <div class="tabs">
+      <button class="tab-btn active" onclick="showTab('input')"><span class="tab-num">01</span>Data Input</button>
+      <button class="tab-btn" onclick="showTab('parse')"><span class="tab-num">02</span>Parse &amp; Extract</button>
+      <button class="tab-btn" onclick="showTab('score')"><span class="tab-num">03</span>Credit Score</button>
+      <button class="tab-btn" onclick="showTab('report')"><span class="tab-num">04</span>Full Report</button>
+    </div>
+  </div>
+
+  <!-- ════════════════ TAB 1: INPUT ════════════════ -->
+  <div class="section active" id="tab-input">
+
+    <div class="card">
+      <div class="card-title"><span class="card-title-icon">📄</span>Upload Bank Statement</div>
+      <div class="upload-zone" id="dropzone" onclick="simulateUpload()" ondragover="event.preventDefault();this.classList.add('dragging')" ondragleave="this.classList.remove('dragging')">
+        <div class="upload-icon">📂</div>
+        <div class="upload-text">
+          Click to upload your bank statement PDF<br>
+          <span style="color:var(--gold);font-size:0.68rem">or drag &amp; drop here</span><br>
+          <span style="opacity:0.5;font-size:0.62rem">PDF · CSV · XLS — Max 10 MB</span>
+        </div>
+      </div>
+      <div class="upload-success" id="upload-ok">✓ bank_statement_april_2025.pdf uploaded successfully (1.2 MB)</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="card-title-icon">👤</span>Personal Information</div>
+      <div class="grid2">
+        <div class="field"><label>Full Name</label><input type="text" id="p-name" value="Rajesh Kumar" /></div>
+        <div class="field"><label>Age</label><input type="number" id="p-age" value="28" min="18" max="80" /></div>
+        <div class="field"><label>Occupation</label>
+          <select id="p-occ">
+            <option>Gig Worker (Ola/Swiggy)</option>
+            <option selected>Salaried Employee</option>
+            <option>Self Employed</option>
+            <option>Farmer</option>
+            <option>Student</option>
+          </select>
+        </div>
+        <div class="field"><label>City</label><input type="text" id="p-city" value="Chennai, Tamil Nadu" /></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="card-title-icon">📊</span>Financial Signals — Alternative Data</div>
+      <div class="grid2">
+        <div class="field">
+          <label>Monthly Income (₹)</label>
+          <div class="range-row">
+            <input type="range" min="5000" max="150000" step="1000" value="35000" id="f-income" oninput="rv('f-income','rv-income','₹','')">
+            <span class="range-val" id="rv-income">₹35,000</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>Monthly Expenses (₹)</label>
+          <div class="range-row">
+            <input type="range" min="3000" max="100000" step="1000" value="22000" id="f-expenses" oninput="rv('f-expenses','rv-expenses','₹','')">
+            <span class="range-val" id="rv-expenses">₹22,000</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>Utility Bills Paid on Time (%)</label>
+          <div class="range-row">
+            <input type="range" min="0" max="100" value="92" id="f-utility" oninput="rv('f-utility','rv-utility','','%')">
+            <span class="range-val" id="rv-utility">92%</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>UPI Transactions / Month</label>
+          <div class="range-row">
+            <input type="range" min="0" max="200" value="67" id="f-upi" oninput="rv('f-upi','rv-upi','','')">
+            <span class="range-val" id="rv-upi">67</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>Months at Current Job</label>
+          <div class="range-row">
+            <input type="range" min="0" max="120" value="18" id="f-tenure" oninput="rv('f-tenure','rv-tenure','','m')">
+            <span class="range-val" id="rv-tenure">18m</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>Rent Payment Regularity (%)</label>
+          <div class="range-row">
+            <input type="range" min="0" max="100" value="100" id="f-rent" oninput="rv('f-rent','rv-rent','','%')">
+            <span class="range-val" id="rv-rent">100%</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>Account Overdrafts (Last 12m)</label>
+          <div class="range-row">
+            <input type="range" min="0" max="24" value="1" id="f-overdraft" oninput="rv('f-overdraft','rv-overdraft','','')">
+            <span class="range-val" id="rv-overdraft">1</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>Avg Monthly Balance (₹)</label>
+          <div class="range-row">
+            <input type="range" min="500" max="50000" step="500" value="8500" id="f-balance" oninput="rv('f-balance','rv-balance','₹','')">
+            <span class="range-val" id="rv-balance">₹8,500</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="goStep2()">Analyze with Gemini AI →</button>
+    </div>
+  </div>
+
+  <!-- ════════════════ TAB 2: PARSE ════════════════ -->
+  <div class="section" id="tab-parse">
+    <div class="steps">
+      <div class="step-item done">Upload</div>
+      <div class="step-item active">LLM Parse</div>
+      <div class="step-item">Score</div>
+      <div class="step-item">Report</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="card-title-icon">🤖</span>Gemini Bank Statement Parser</div>
+      <div class="loading-row" id="parse-loading" style="display:none">
+        <div class="ld"></div><div class="ld"></div><div class="ld"></div>
+        <span>Gemini is reading and analyzing your bank statement…</span>
+      </div>
+      <div class="error-box" id="parse-error"></div>
+      <div id="parse-output" style="display:none">
+        <div class="llm-box" id="llm-text"></div>
+      </div>
+      <div id="parse-btn-wrap" style="margin-top:0.75rem">
+        <button class="btn btn-ghost" onclick="runParser()">Run Gemini Parser →</button>
+      </div>
+    </div>
+
+    <div class="card" id="txn-card" style="display:none">
+      <div class="card-title"><span class="card-title-icon">🧾</span>Extracted Transactions</div>
+      <table class="txn-table">
+        <thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Amount</th><th>Balance</th></tr></thead>
+        <tbody id="txn-body"></tbody>
+      </table>
+    </div>
+
+    <div class="card" id="feat-card" style="display:none">
+      <div class="card-title"><span class="card-title-icon">📈</span>Extracted Financial Features</div>
+      <div class="grid3" id="features-grid"></div>
+      <div class="btn-row" style="margin-top:1.25rem">
+        <button class="btn btn-primary" onclick="goStep3()">Generate Credit Score →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════ TAB 3: SCORE ════════════════ -->
+  <div class="section" id="tab-score">
+    <div class="steps">
+      <div class="step-item done">Upload</div>
+      <div class="step-item done">LLM Parse</div>
+      <div class="step-item active">Score</div>
+      <div class="step-item">Report</div>
+    </div>
+
+    <div class="grid2" style="align-items:start">
+      <div class="card">
+        <div class="card-title"><span class="card-title-icon">🎯</span>Credit Score</div>
+        <div class="score-card">
+          <svg class="gauge-svg" viewBox="0 0 220 120" id="gauge">
+            <defs>
+              <linearGradient id="gGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#ef233c"/>
+                <stop offset="40%" stop-color="#f0a500"/>
+                <stop offset="100%" stop-color="#06d6a0"/>
+              </linearGradient>
+            </defs>
+            <path d="M 25 105 A 85 85 0 0 1 195 105" fill="none" stroke="#1e1e35" stroke-width="14" stroke-linecap="round"/>
+            <path d="M 25 105 A 85 85 0 0 1 195 105" fill="none" stroke="url(#gGrad)" stroke-width="14" stroke-linecap="round" stroke-dasharray="267" stroke-dashoffset="0" opacity="0.18"/>
+            <path id="gauge-arc" d="M 25 105 A 85 85 0 0 1 195 105" fill="none" stroke="url(#gGrad)" stroke-width="14" stroke-linecap="round" stroke-dasharray="267" stroke-dashoffset="267"/>
+          </svg>
+          <div class="score-num" id="score-num">0</div>
+          <div class="score-denom">out of 900</div>
+          <div class="score-label" id="score-cat">—</div>
+          <div id="score-risk"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="card-title-icon">🔍</span>Score Components</div>
+        <div id="score-bars"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="card-title-icon">📉</span>Spending Pattern — Last 6 Months</div>
+      <div class="chart-wrap" id="spend-chart"></div>
+      <div class="chart-months" id="chart-months"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="card-title-icon">💡</span>Key Insights</div>
+      <div id="insights-list"></div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="goStep4()">Generate Full Report →</button>
+    </div>
+  </div>
+
+  <!-- ════════════════ TAB 4: REPORT ════════════════ -->
+  <div class="section" id="tab-report">
+    <div class="steps">
+      <div class="step-item done">Upload</div>
+      <div class="step-item done">LLM Parse</div>
+      <div class="step-item done">Score</div>
+      <div class="step-item active">Report</div>
+    </div>
+
+    <div class="card">
+      <div class="report-hd">
+        <div>
+          <div class="card-title" style="margin-bottom:0.3rem"><span class="card-title-icon">📋</span>Credit Analysis Report</div>
+          <div class="report-id-text" id="report-id-text"></div>
+        </div>
+        <div id="report-risk-badge"></div>
+      </div>
+      <div class="grid3">
+        <div class="metric-card"><div class="metric-val" id="r-score">—</div><div class="metric-lbl">Credit Score</div></div>
+        <div class="metric-card"><div class="metric-val" id="r-income">—</div><div class="metric-lbl">Monthly Income</div></div>
+        <div class="metric-card"><div class="metric-val" id="r-dti">—</div><div class="metric-lbl">Debt-to-Income</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="card-title-icon">✍️</span>AI Credit Narrative <span style="color:var(--muted);font-size:0.6rem;font-weight:400;margin-left:0.5rem">by Gemini</span></div>
+      <div class="loading-row" id="report-loading" style="display:none">
+        <div class="ld"></div><div class="ld"></div><div class="ld"></div>
+        <span>Gemini is crafting your personalized credit narrative…</span>
+      </div>
+      <div class="error-box" id="report-error"></div>
+      <div class="llm-box" id="report-narrative" style="display:none"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="card-title-icon">🚀</span>Recommendations to Improve Score</div>
+      <div id="recommendations"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="card-title-icon">📊</span>Score Breakdown</div>
+      <div id="report-bars"></div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="showTab('input')">← Start New Analysis</button>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<script>
+// ──────────────────────────────────────────
+//  GEMINI CONFIG
+// ──────────────────────────────────────────
+let DEFAULT_KEY = '';  // set to your key if you want to hardcode
+const GEMINI_MODEL = 'gemini-2.0-flash';
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+
+function getKey() {
+  const inp = document.getElementById('gemini-key').value.trim();
+  return inp || DEFAULT_KEY;
+}
+
+function onKeyInput() {
+  const k = document.getElementById('gemini-key').value.trim();
+  const b = document.getElementById('key-badge');
+  if (k.startsWith('AIza') && k.length > 20) {
+    b.className = 'key-badge key-ok'; b.textContent = '✓ Key Set';
+    DEFAULT_KEY = k;
+  } else if (!k) {
+    b.className = 'key-badge key-ok'; b.textContent = DEFAULT_KEY ? '✓ Default Key' : 'No Key';
+  } else {
+    b.className = 'key-badge key-bad'; b.textContent = 'Invalid';
+  }
+}
+
+async function callGemini(prompt) {
+  const key = getKey();
+  if (!key) throw new Error('No API key set. Please enter your Gemini API key above.');
+  const res = await fetch(`${GEMINI_URL}?key=${key}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { maxOutputTokens: 1000, temperature: 0.7 }
+    })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  if (!text) throw new Error('Empty response from Gemini');
+  return text;
+}
+
+// ──────────────────────────────────────────
+//  UI UTILS
+// ──────────────────────────────────────────
+function showTab(t) {
+  const names = ['input','parse','score','report'];
+  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', names[i]===t));
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById('tab-'+t).classList.add('active');
+}
+
+function rv(rangeId, outId, pre, suf) {
+  const v = parseInt(document.getElementById(rangeId).value);
+  const el = document.getElementById(outId);
+  el.textContent = (pre === '₹') ? pre + v.toLocaleString('en-IN') : pre + v + suf;
+}
+
+function simulateUpload() {
+  document.getElementById('upload-ok').style.display = 'block';
+  const dz = document.getElementById('dropzone');
+  dz.style.borderColor = 'var(--green)';
+  dz.style.background = 'rgba(6,214,160,0.04)';
+  dz.querySelector('.upload-icon').textContent = '✅';
+}
+
+function getD() {
+  return {
+    name: document.getElementById('p-name').value || 'Rajesh Kumar',
+    age: +document.getElementById('p-age').value || 28,
+    occ: document.getElementById('p-occ').value,
+    city: document.getElementById('p-city').value || 'Chennai',
+    income: +document.getElementById('f-income').value,
+    expenses: +document.getElementById('f-expenses').value,
+    utility: +document.getElementById('f-utility').value,
+    upi: +document.getElementById('f-upi').value,
+    tenure: +document.getElementById('f-tenure').value,
+    rent: +document.getElementById('f-rent').value,
+    overdraft: +document.getElementById('f-overdraft').value,
+    balance: +document.getElementById('f-balance').value,
+  };
+}
+
+// ──────────────────────────────────────────
+//  SCORE ALGORITHM
+// ──────────────────────────────────────────
+function computeScore(d) {
+  const sr = (d.income - d.expenses) / d.income;
+  let s = 300;
+  s += Math.min(120, sr * 200);
+  s += Math.min(80, (d.utility/100)*80);
+  s += Math.min(80, (d.rent/100)*80);
+  s += Math.min(60, Math.min(d.upi,100)*0.6);
+  s += Math.min(70, (d.tenure/60)*70);
+  s += Math.min(50, (d.balance/20000)*50);
+  s -= d.overdraft * 15;
+  return Math.max(300, Math.min(900, Math.round(s)));
+}
+
+function getCat(s) {
+  if (s>=750) return { lbl:'Excellent', risk:'Low Risk',  rCls:'risk-low',  color:'#06d6a0' };
+  if (s>=650) return { lbl:'Good',      risk:'Low Risk',  rCls:'risk-low',  color:'#06d6a0' };
+  if (s>=550) return { lbl:'Fair',      risk:'Medium Risk',rCls:'risk-mid', color:'#f0a500' };
+  if (s>=450) return { lbl:'Poor',      risk:'Medium Risk',rCls:'risk-mid', color:'#f0a500' };
+  return             { lbl:'Very Poor', risk:'High Risk',  rCls:'risk-high', color:'#ef233c' };
+}
+
+function getComponents(d) {
+  const sav = d.income - d.expenses;
+  return [
+    { lbl:'Payment Discipline', sc: Math.min(100,Math.round((d.utility+d.rent)/2)) },
+    { lbl:'Income Stability',   sc: Math.min(100,Math.round((d.tenure/60)*100)) },
+    { lbl:'Savings Behavior',   sc: Math.min(100,Math.round((sav/d.income)*100)) },
+    { lbl:'Digital Activity',   sc: Math.min(100,Math.round((d.upi/100)*100)) },
+    { lbl:'Account Health',     sc: Math.max(0,Math.min(100,100-d.overdraft*12)) },
+    { lbl:'Balance Buffer',     sc: Math.min(100,Math.round((d.balance/20000)*100)) },
+  ];
+}
+
+// ──────────────────────────────────────────
+//  SAMPLE DATA
+// ──────────────────────────────────────────
+const TXNS = [
+  {date:'01 Apr',desc:'Salary Credit',       cat:'salary',amt:35000, bal:38200},
+  {date:'03 Apr',desc:'Rent Payment',         cat:'bill',  amt:-10000,bal:28200},
+  {date:'05 Apr',desc:'BESCOM Electricity',   cat:'bill',  amt:-850,  bal:27350},
+  {date:'07 Apr',desc:'Swiggy Food Order',    cat:'food',  amt:-340,  bal:27010},
+  {date:'10 Apr',desc:'UPI — Grocery Store',  cat:'upi',   amt:-1200, bal:25810},
+  {date:'12 Apr',desc:'Airtel Broadband',     cat:'bill',  amt:-599,  bal:25211},
+  {date:'15 Apr',desc:'UPI — Petrol Bunk',    cat:'upi',   amt:-500,  bal:24711},
+  {date:'18 Apr',desc:'Amazon Purchase',      cat:'other', amt:-1499, bal:23212},
+  {date:'22 Apr',desc:'UPI — Medical Store',  cat:'upi',   amt:-450,  bal:22762},
+  {date:'25 Apr',desc:'Mobile Recharge',      cat:'bill',  amt:-399,  bal:22363},
+  {date:'28 Apr',desc:'UPI — Restaurant',     cat:'food',  amt:-680,  bal:21683},
+  {date:'30 Apr',desc:'ATM Withdrawal',       cat:'other', amt:-2000, bal:19683},
+];
+
+// typewriter effect
+function typewrite(el, text, speed=16) {
+  let i = 0;
+  el.textContent = '';
+  return new Promise(resolve => {
+    const iv = setInterval(() => {
+      i += 3;
+      el.textContent = text.substring(0, i);
+      if (i >= text.length) { clearInterval(iv); el.textContent = text; resolve(); }
+    }, speed);
+  });
+}
+
+function renderBars(containerId, comps) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = comps.map(c => `
+    <div class="bar-row">
+      <div class="bar-meta"><span>${c.lbl}</span><span>${c.sc}/100</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:0%" data-w="${c.sc}%"></div></div>
+    </div>`).join('');
+  setTimeout(() => {
+    el.querySelectorAll('.bar-fill').forEach(b => { b.style.width = b.dataset.w; });
+  }, 120);
+}
+
+// ──────────────────────────────────────────
+//  STEP 2 — PARSE
+// ──────────────────────────────────────────
+function goStep2() { showTab('parse'); }
+
+async function runParser() {
+  const d = getD();
+  document.getElementById('parse-btn-wrap').style.display = 'none';
+  document.getElementById('parse-loading').style.display = 'flex';
+  document.getElementById('parse-error').style.display = 'none';
+
+  const prompt = `You are a bank statement parser AI. A user named ${d.name}, aged ${d.age}, working as a ${d.occ} in ${d.city} has uploaded their bank statement.
+
+Monthly Income: ₹${d.income.toLocaleString('en-IN')}
+Monthly Expenses: ₹${d.expenses.toLocaleString('en-IN')}
+Utility Bills Paid on Time: ${d.utility}%
+UPI Transactions/Month: ${d.upi}
+Job Tenure: ${d.tenure} months
+Rent Payment Regularity: ${d.rent}%
+Account Overdrafts (12m): ${d.overdraft}
+Avg Monthly Balance: ₹${d.balance.toLocaleString('en-IN')}
+
+In 3-4 sentences, summarize what this bank statement reveals about this person's financial behavior and creditworthiness. Be specific, professional, and mention the key signals you extracted. End with a one-line overall assessment.`;
+
+  let text;
+  try {
+    text = await callGemini(prompt);
+  } catch(e) {
+    document.getElementById('parse-loading').style.display = 'none';
+    const eb = document.getElementById('parse-error');
+    eb.style.display = 'block';
+    eb.textContent = `⚠ Gemini error: ${e.message}. Showing fallback analysis.`;
+    const sav = d.income - d.expenses;
+    text = `Bank statement analysis for ${d.name}: The account shows consistent salary credits of ₹${d.income.toLocaleString('en-IN')} each month, indicating stable ${d.occ.toLowerCase()} income. Utility and rent payments are made consistently with a ${d.utility}% on-time bill payment rate. UPI transaction frequency of ${d.upi}/month reflects active digital financial participation in the formal economy. Average balance of ₹${d.balance.toLocaleString('en-IN')} with ${d.overdraft} overdraft instance(s) over 12 months.\n\nOverall Assessment: This individual demonstrates disciplined financial behavior with strong payment consistency — a credible candidate for formal credit.`;
+  }
+
+  document.getElementById('parse-loading').style.display = 'none';
+  document.getElementById('parse-output').style.display = 'block';
+  await typewrite(document.getElementById('llm-text'), text);
+  showExtracted(d);
+}
+
+function showExtracted(d) {
+  // Transactions
+  const tbody = document.getElementById('txn-body');
+  tbody.innerHTML = TXNS.map(t => {
+    const pos = t.amt > 0;
+    const cmap = {salary:'tag-salary',bill:'tag-bill',food:'tag-food',upi:'tag-upi',other:'tag-other'};
+    return `<tr>
+      <td>${t.date}</td>
+      <td style="color:var(--text)">${t.desc}</td>
+      <td><span class="tag ${cmap[t.cat]}">${t.cat}</span></td>
+      <td class="${pos?'amt-pos':'amt-neg'}">${pos?'+':''} ₹${Math.abs(t.amt).toLocaleString('en-IN')}</td>
+      <td style="color:var(--muted)">₹${t.bal.toLocaleString('en-IN')}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('txn-card').style.display = 'block';
+
+  // Features
+  const sav = d.income - d.expenses;
+  const feats = [
+    { lbl:'Avg Monthly Income',    val:'₹'+d.income.toLocaleString('en-IN') },
+    { lbl:'Savings Rate',          val:Math.round((sav/d.income)*100)+'%' },
+    { lbl:'Payment Regularity',    val:d.utility+'%' },
+    { lbl:'Digital Activity',      val:d.upi+' UPI/mo' },
+    { lbl:'Employment Stability',  val:d.tenure+'m tenure' },
+    { lbl:'Rent Consistency',      val:d.rent+'%' },
+  ];
+  document.getElementById('features-grid').innerHTML = feats.map(f =>
+    `<div class="metric-card"><div class="metric-val">${f.val}</div><div class="metric-lbl">${f.lbl}</div></div>`
+  ).join('');
+  document.getElementById('feat-card').style.display = 'block';
+}
+
+// ──────────────────────────────────────────
+//  STEP 3 — CREDIT SCORE
+// ──────────────────────────────────────────
+function goStep3() {
+  const d = getD();
+  const score = computeScore(d);
+  const cat = getCat(score);
+  showTab('score');
+  setTimeout(() => renderScore(d, score, cat), 150);
+}
+
+function renderScore(d, score, cat) {
+  // Animate gauge
+  const arc = document.getElementById('gauge-arc');
+  const numEl = document.getElementById('score-num');
+  const catEl = document.getElementById('score-cat');
+  const riskEl = document.getElementById('score-risk');
+  let cur = 300;
+  const step = (score - 300) / 55;
+  const iv = setInterval(() => {
+    cur = Math.min(cur + step, score);
+    numEl.textContent = Math.round(cur);
+    const pct = (cur - 300) / 600;
+    arc.setAttribute('stroke-dashoffset', (267 - 267*pct).toFixed(1));
+    if (cur >= score) { clearInterval(iv); numEl.textContent = score; }
+  }, 18);
+  catEl.textContent = cat.lbl;
+  catEl.style.color = cat.color;
+  riskEl.innerHTML = `<span class="risk-pill ${cat.rCls}">${cat.risk}</span>`;
+
+  renderBars('score-bars', getComponents(d));
+
+  // Spending chart
+  const months = ['Nov','Dec','Jan','Feb','Mar','Apr'];
+  const spends = [18200,21400,19800,23100,20500,d.expenses];
+  const mx = Math.max(...spends);
+  document.getElementById('spend-chart').innerHTML = spends.map((v,i) => {
+    const h = Math.round((v/mx)*100);
+    return `<div class="chart-bar" style="height:${h}%"><div class="tip">₹${v.toLocaleString('en-IN')}</div></div>`;
+  }).join('');
+  document.getElementById('chart-months').innerHTML = months.map(m => `<div class="chart-month">${m}</div>`).join('');
+
+  // Insights
+  const sav = d.income - d.expenses;
+  const ins = [];
+  if (d.utility >= 85)
+    ins.push({t:'positive',ic:'✓',ti:'Strong Payment Discipline',de:`${d.utility}% utility bill on-time rate over 12 months — indicates high financial responsibility.`});
+  else
+    ins.push({t:'negative',ic:'!',ti:'Irregular Bill Payments',de:`${d.utility}% on-time rate for utility bills. Missed payments reduce creditworthiness significantly.`});
+  if (d.rent >= 95)
+    ins.push({t:'positive',ic:'✓',ti:'Consistent Rent Payment',de:`Rent paid on time ${d.rent}% of months — the strongest alternative credit signal available.`});
+  if (sav/d.income > 0.2)
+    ins.push({t:'positive',ic:'✓',ti:'Healthy Savings Rate',de:`Saving ${Math.round((sav/d.income)*100)}% of income monthly. Demonstrates financial discipline and EMI repayment capacity.`});
+  else
+    ins.push({t:'neutral',ic:'~',ti:'Low Savings Buffer',de:`Only ${Math.round((sav/d.income)*100)}% monthly savings rate. Increasing this would improve creditworthiness.`});
+  if (d.upi >= 40)
+    ins.push({t:'positive',ic:'✓',ti:'Active Digital Footprint',de:`${d.upi} UPI transactions/month shows active participation in the formal financial ecosystem.`});
+  if (d.overdraft > 2)
+    ins.push({t:'negative',ic:'!',ti:'Multiple Overdrafts',de:`${d.overdraft} overdraft(s) in 12 months signals financial stress. Banks view this negatively.`});
+  if (d.tenure >= 12)
+    ins.push({t:'positive',ic:'✓',ti:'Stable Employment',de:`${d.tenure} months at current job — employment stability is a strong positive credit signal.`});
+
+  const imap = {positive:'ins-pos',negative:'ins-neg',neutral:'ins-neu'};
+  const icolor = {positive:'var(--green)',negative:'var(--red)',neutral:'var(--gold)'};
+  document.getElementById('insights-list').innerHTML = ins.slice(0,4).map(i => `
+    <div class="insight-row">
+      <div class="insight-ico ${imap[i.t]}">${i.ic}</div>
+      <div>
+        <div class="insight-title" style="color:${icolor[i.t]}">${i.ti}</div>
+        <div class="insight-desc">${i.de}</div>
+      </div>
+    </div>`).join('');
+}
+
+// ──────────────────────────────────────────
+//  STEP 4 — FULL REPORT
+// ──────────────────────────────────────────
+async function goStep4() {
+  const d = getD();
+  const score = computeScore(d);
+  const cat = getCat(score);
+  showTab('report');
+
+  const rid = 'CLR-'+Date.now().toString().slice(-8)+'-CHN';
+  const dti = Math.round((d.expenses/d.income)*100);
+  document.getElementById('report-id-text').textContent = `Report ID: ${rid} | Generated: ${new Date().toLocaleDateString('en-IN')}`;
+  document.getElementById('r-score').textContent = score;
+  document.getElementById('r-score').style.color = cat.color;
+  document.getElementById('r-income').textContent = '₹'+d.income.toLocaleString('en-IN');
+  document.getElementById('r-dti').textContent = dti+'%';
+  document.getElementById('r-dti').style.color = dti>70?'var(--red)':dti>50?'var(--gold)':'var(--green)';
+  document.getElementById('report-risk-badge').innerHTML = `<span class="risk-pill ${cat.rCls}">${cat.lbl} — ${cat.risk}</span>`;
+
+  // Recommendations
+  const sav = d.income - d.expenses;
+  const recs = [];
+  if (d.utility < 90) recs.push('Set up auto-pay for all utility bills. Even one missed payment can drop your score by 20–30 points.');
+  if (d.balance < 15000) recs.push(`Increase average monthly balance to ₹15,000+. Currently at ₹${d.balance.toLocaleString('en-IN')} — a higher buffer signals financial stability.`);
+  if (sav/d.income < 0.25) recs.push(`Target 25% monthly savings rate. You're at ${Math.round((sav/d.income)*100)}%. Even ₹2,000 more monthly improves your score.`);
+  if (d.overdraft > 0) recs.push('Eliminate account overdrafts completely. Each overdraft negatively impacts your credit for 12 months.');
+  if (d.upi < 50) recs.push('Increase digital payment usage to 50+ UPI transactions/month to build a stronger financial footprint.');
+  recs.push('Consider opening a Fixed Deposit of ₹10,000+. FDs demonstrate long-term savings commitment.');
+  recs.push('Link Aadhaar to your bank account and enable Account Aggregator consent to unlock your full financial profile.');
+  document.getElementById('recommendations').innerHTML = recs.slice(0,5).map((r,i) =>
+    `<div class="rec-item"><div class="rec-num">${i+1}</div><div class="rec-text">${r}</div></div>`
+  ).join('');
+
+  renderBars('report-bars', getComponents(d));
+
+  // AI Narrative
+  document.getElementById('report-loading').style.display = 'flex';
+  document.getElementById('report-narrative').style.display = 'none';
+  document.getElementById('report-error').style.display = 'none';
+
+  const prompt = `You are a senior credit analyst. Write a professional credit narrative for the following individual. Be specific, use the actual numbers, and write in 4-5 sentences.
+
+Applicant: ${d.name}, Age ${d.age}, ${d.occ}, ${d.city}
+Credit Score: ${score}/900 (${cat.lbl})
+Monthly Income: ₹${d.income.toLocaleString('en-IN')}
+Monthly Expenses: ₹${d.expenses.toLocaleString('en-IN')}
+Monthly Savings: ₹${sav.toLocaleString('en-IN')} (${Math.round((sav/d.income)*100)}%)
+Utility Bill Payment Rate: ${d.utility}%
+Rent Payment Regularity: ${d.rent}%
+UPI Transactions/Month: ${d.upi}
+Job Tenure: ${d.tenure} months
+Account Overdrafts (12m): ${d.overdraft}
+Average Monthly Balance: ₹${d.balance.toLocaleString('en-IN')}
+
+Write the credit narrative now. Start with the applicant's name. Be direct and professional.`;
+
+  let narText;
+  try {
+    narText = await callGemini(prompt);
+  } catch(e) {
+    document.getElementById('report-loading').style.display = 'none';
+    const eb = document.getElementById('report-error');
+    eb.style.display = 'block';
+    eb.textContent = `⚠ Gemini error: ${e.message}. Showing fallback narrative.`;
+    narText = `${d.name} is a ${d.age}-year-old ${d.occ.toLowerCase()} based in ${d.city}, presenting an alternative credit score of ${score}/900 (${cat.lbl}). Monthly income of ₹${d.income.toLocaleString('en-IN')} with expenses of ₹${d.expenses.toLocaleString('en-IN')} yields a savings rate of ${Math.round((sav/d.income)*100)}%, demonstrating ${sav/d.income>0.2?'adequate':'limited'} financial buffer. The applicant shows ${d.utility}% on-time utility bill payments and ${d.rent}% rent payment regularity — both strong alternative credit signals. With ${d.tenure} months of employment tenure and ${d.upi} monthly UPI transactions, the digital financial footprint is ${d.upi>40?'active and consistent':'moderate'}. Based on alternative data analysis, this applicant ${score>=650?'is recommended for credit approval with standard terms':'should be considered for a smaller credit limit with closer monitoring'}.`;
+  }
+
+  document.getElementById('report-loading').style.display = 'none';
+  const narEl = document.getElementById('report-narrative');
+  narEl.style.display = 'block';
+  await typewrite(narEl, narText);
+}
+</script>
+</body>
+</html>
