@@ -4,4 +4,8 @@ CreditLens AI is a single-file, browser-based alternative credit scoring tool de
 Instead of relying on a CIBIL score, CreditLens analyzes alternative financial signals extracted from bank statements using Google Gemini AI, producing a creditworthiness score from 300–900 along with a detailed, AI-generated credit narrative.
 
 
-creditlens_ai_overview.svg
+## 🏗️ Architecture
+
+<p align="center">
+  <img src="creditlens_ai_overview.svg" alt="CreditLens AI Architecture" width="800"/>
+</p>
